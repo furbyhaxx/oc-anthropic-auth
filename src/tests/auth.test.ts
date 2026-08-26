@@ -172,6 +172,35 @@ describe('exchange', () => {
 
     expect(result.type).toBe('failed')
   })
+
+  test('times out a stalled token exchange', async () => {
+    const timeout = new AbortController()
+    const timeoutSpy = spyOn(AbortSignal, 'timeout').mockReturnValue(
+      timeout.signal,
+    )
+    spyOn(globalThis, 'fetch').mockImplementation(((_input, init) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(init.signal?.reason),
+          { once: true },
+        )
+        timeout.abort(
+          new DOMException('The operation timed out', 'TimeoutError'),
+        )
+      })
+    }) as typeof fetch)
+
+    const result = await exchange(
+      'code#state',
+      'verifier',
+      CODE_CALLBACK_URL,
+      'state',
+    )
+
+    expect(result.type).toBe('failed')
+    expect(timeoutSpy).toHaveBeenCalledWith(30_000)
+  })
 })
 
 describe('refreshToken', () => {
@@ -278,6 +307,43 @@ describe('refreshToken', () => {
         return Promise.reject(
           Object.assign(new Error('socket reset'), { code: 'ECONNRESET' }),
         )
+      }
+      return Promise.resolve(
+        Response.json({
+          refresh_token: 'new-refresh',
+          access_token: 'new-access',
+          expires_in: 3600,
+        }),
+      )
+    }) as unknown as typeof fetch)
+
+    const result = await refreshToken('old-refresh')
+
+    expect(result.type).toBe('success')
+    expect(attempts).toBe(2)
+  })
+
+  test('retries an Undici socket error from the response body', async () => {
+    let attempts = 0
+    spyOn(globalThis, 'setTimeout').mockImplementation(((
+      handler: () => unknown,
+    ) => {
+      handler()
+      return 0
+    }) as unknown as typeof setTimeout)
+    spyOn(globalThis, 'fetch').mockImplementation((() => {
+      attempts++
+      if (attempts === 1) {
+        const body = new ReadableStream({
+          start(controller) {
+            controller.error(
+              Object.assign(new TypeError('terminated'), {
+                cause: { code: 'UND_ERR_SOCKET' },
+              }),
+            )
+          },
+        })
+        return Promise.resolve(new Response(body, { status: 200 }))
       }
       return Promise.resolve(
         Response.json({

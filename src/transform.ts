@@ -373,18 +373,32 @@ export function createStrippedStream(response: Response): Response {
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   const encoder = new TextEncoder()
-
+  let pending = ''
   const stream = new ReadableStream({
     async pull(controller) {
-      const { done, value } = await reader.read()
-      if (done) {
-        controller.close()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          pending += decoder.decode()
+          if (pending)
+            controller.enqueue(encoder.encode(stripToolPrefix(pending)))
+          controller.close()
+          return
+        }
+
+        pending += decoder.decode(value, { stream: true })
+        const boundary = pending.lastIndexOf('\n')
+        if (boundary === -1) continue
+
+        controller.enqueue(
+          encoder.encode(stripToolPrefix(pending.slice(0, boundary + 1))),
+        )
+        pending = pending.slice(boundary + 1)
         return
       }
-
-      let text = decoder.decode(value, { stream: true })
-      text = stripToolPrefix(text)
-      controller.enqueue(encoder.encode(text))
+    },
+    cancel(reason) {
+      return reader.cancel(reason)
     },
   })
 

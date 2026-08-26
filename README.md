@@ -19,7 +19,7 @@ An [OpenCode](https://github.com/anomalyco/opencode) plugin that provides Anthro
 | 2.x (this readme) | OpenCode v2 (beta plugin API) | `@ex-machina/opencode-anthropic-auth` |
 | 1.x               | OpenCode v1       | `@ex-machina/opencode-anthropic-auth@1` |
 
-OpenCode v2's plugin API is still beta, and this plugin currently targets the `@opencode-ai/plugin@0.0.0-next-17444` prerelease of it — pin the plugin version and keep an eye on the changelog when bumping either side. If you're still on OpenCode v1, keep using a `1.x` release; v1 plugins are **not** loadable by OpenCode v2, and this v2 port is not loadable by OpenCode v1.
+OpenCode v2's plugin API is still beta, and this plugin currently targets `@opencode-ai/plugin@0.0.0-beta-18314`. Pin the plugin version and keep an eye on the changelog when bumping either side. If you're still on OpenCode v1, keep using a `1.x` release; v1 plugins are **not** loadable by OpenCode v2, and this v2 port is not loadable by OpenCode v1.
 
 ## Usage
 

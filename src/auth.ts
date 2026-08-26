@@ -18,7 +18,35 @@ type TokenResponse = {
   expires_in: number
 }
 
-const REFRESH_TIMEOUT_MS = 30_000
+const TOKEN_TIMEOUT_MS = 30_000
+
+function isNetworkError(error: unknown): boolean {
+  const codes = new Set([
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'UND_ERR_CONNECT_TIMEOUT',
+    'UND_ERR_SOCKET',
+  ])
+  let current: unknown = error
+
+  for (let depth = 0; depth < 5; depth++) {
+    if (typeof current !== 'object' || current === null) return false
+    if (
+      ('name' in current &&
+        (current.name === 'TimeoutError' || current.name === 'AbortError')) ||
+      ('code' in current &&
+        typeof current.code === 'string' &&
+        codes.has(current.code)) ||
+      (current instanceof Error && current.message.includes('fetch failed'))
+    ) {
+      return true
+    }
+    current = 'cause' in current ? current.cause : undefined
+  }
+
+  return false
+}
 
 function isTokenResponse(value: unknown): value is TokenResponse {
   if (typeof value !== 'object' || value === null) return false
@@ -97,24 +125,32 @@ async function exchangeCode(
   verifier: string,
   redirectUri: string,
 ): Promise<ExchangeResult> {
-  const result = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/plain, */*',
-      'User-Agent': 'axios/1.13.6',
-    },
-    body: JSON.stringify({
-      code: callback.code,
-      state: callback.state,
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      redirect_uri: redirectUri,
-      code_verifier: verifier,
-    }),
-  })
+  let result: Response
+  try {
+    result = await fetch(TOKEN_URL, {
+      method: 'POST',
+      signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain, */*',
+        'User-Agent': 'axios/1.13.6',
+      },
+      body: JSON.stringify({
+        code: callback.code,
+        state: callback.state,
+        grant_type: 'authorization_code',
+        client_id: CLIENT_ID,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      }),
+    })
+  } catch (error) {
+    if (isNetworkError(error)) return { type: 'failed' }
+    throw error
+  }
 
   if (!result.ok) {
+    await result.body?.cancel()
     return {
       type: 'failed',
     }
@@ -204,7 +240,7 @@ export async function refreshToken(
 
       const response = await fetch(TOKEN_URL, {
         method: 'POST',
-        signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/plain, */*',
@@ -237,20 +273,7 @@ export async function refreshToken(
         ...tokens,
       }
     } catch (error) {
-      const isNetworkError =
-        (typeof error === 'object' &&
-          error !== null &&
-          'name' in error &&
-          (error.name === 'TimeoutError' || error.name === 'AbortError')) ||
-        (error instanceof Error &&
-          (error.message.includes('fetch failed') ||
-            ('code' in error &&
-              (error.code === 'ECONNRESET' ||
-                error.code === 'ECONNREFUSED' ||
-                error.code === 'ETIMEDOUT' ||
-                error.code === 'UND_ERR_CONNECT_TIMEOUT'))))
-
-      if (attempt < maxRetries && isNetworkError) {
+      if (attempt < maxRetries && isNetworkError(error)) {
         continue
       }
 

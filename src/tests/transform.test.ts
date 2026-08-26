@@ -432,6 +432,37 @@ describe('createStrippedStream', () => {
     expect(text).not.toContain('mcp_read')
   })
 
+  test('strips a tool prefix split across stream chunks', async () => {
+    const chunks = ['data: {"content_block":{"name":"mcp_', 'bash"}}\n\n']
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk))
+        controller.close()
+      },
+    })
+
+    const text = await createStrippedStream(new Response(stream)).text()
+
+    expect(text).toContain('"name": "bash"')
+    expect(text).not.toContain('mcp_bash')
+  })
+
+  test('cancels the upstream response body', async () => {
+    let cancelled = false
+    const stream = new ReadableStream({
+      pull() {},
+      cancel() {
+        cancelled = true
+      },
+    })
+    const reader = createStrippedStream(new Response(stream)).body!.getReader()
+
+    await reader.cancel()
+
+    expect(cancelled).toBe(true)
+  })
+
   test('preserves response status and headers', async () => {
     const stream = new ReadableStream({
       start(controller) {
