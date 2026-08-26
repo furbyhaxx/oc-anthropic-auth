@@ -13,3 +13,4 @@ Port the plugin to the OpenCode v2 plugin API ([#203](https://github.com/ex-mach
 - Anthropic models retain their API price display in OpenCode v2. The beta Promise API cannot cancel the event subscription needed to keep OAuth-dependent catalog costs synchronized safely.
 - `ANTHROPIC_INSECURE` is not supported under OpenCode v2: request hooks can rewrite a `Request` but cannot disable TLS verification for it. The plugin now logs a warning instead of silently leaving it unapplied.
 - `@opencode-ai/plugin` is a pinned production dependency on `0.0.0-beta-18314`, matching the OpenCode v2 beta API used here.
+- Built files are committed so OpenCode can install the plugin directly from a Git revision without requiring development dependencies during installation.

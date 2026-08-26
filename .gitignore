@@ -1,5 +1,4 @@
 node_modules
-dist/
 
 # Agent Facets managed
 .agents/
