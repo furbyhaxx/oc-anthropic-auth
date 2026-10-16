@@ -28,7 +28,7 @@
     "release": "bun run build && bun change publish"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "0.0.0-beta-18314"
+    "@opencode-ai/plugin": "1.19.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
